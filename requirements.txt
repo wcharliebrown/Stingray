@@ -1,0 +1,9 @@
+# Requirements for Markdown Editor macOS App
+# Core dependencies for building the app
+
+py2app>=0.28.0
+
+# Optional development dependencies
+# Uncomment the following lines if you want to use them:
+# watchdog>=2.1.0  # For development auto-reload
+# setuptools>=65.0.0  # For building (usually included with Python) 
