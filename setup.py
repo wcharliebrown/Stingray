@@ -9,6 +9,7 @@ APP = ['markdown_editor.py']
 DATA_FILES = []
 OPTIONS = {
     'argv_emulation': False,  # Avoid Tk console/menu crashes on recent macOS builds
+    'iconfile': 'app_icon.icns',
     'plist': {
         'CFBundleName': 'Markdown Editor',
         'CFBundleDisplayName': 'Markdown Editor',
