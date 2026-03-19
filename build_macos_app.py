@@ -47,9 +47,40 @@ def check_dependencies(python_exe=None):
                     subprocess.check_call([python_exe, '-m', 'pip', 'install', package])
         print("Dependencies installed successfully!")
 
+def find_libffi():
+    """Find libffi.8.dylib — required by _ctypes but not auto-bundled by py2app"""
+    candidates = [
+        '/opt/homebrew/opt/libffi/lib/libffi.8.dylib',  # Apple Silicon Homebrew
+        '/usr/local/opt/libffi/lib/libffi.8.dylib',      # Intel Homebrew
+        '/opt/homebrew/lib/libffi.8.dylib',
+        '/usr/local/lib/libffi.8.dylib',
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            print(f"Found libffi: {path}")
+            return path
+    # Fallback: ask the system
+    try:
+        result = subprocess.run(
+            ['find', '/opt/homebrew', '/usr/local', '-name', 'libffi.8.dylib', '-maxdepth', '6'],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in result.stdout.strip().splitlines():
+            if line and os.path.exists(line):
+                print(f"Found libffi: {line}")
+                return line
+    except Exception:
+        pass
+    print("Warning: libffi.8.dylib not found — the built app may fail to launch")
+    return None
+
+
 def create_setup_py():
     """Create setup.py file for py2app"""
-    setup_content = '''#!/usr/bin/env python3
+    libffi_path = find_libffi()
+    frameworks_line = f"    'frameworks': [{repr(libffi_path)}]," if libffi_path else "    # 'frameworks': [],  # libffi.8.dylib not found — install via: brew install libffi"
+
+    setup_content = f'''#!/usr/bin/env python3
 """
 Setup script for Markdown Editor macOS app
 """
@@ -58,41 +89,41 @@ from setuptools import setup
 
 APP = ['markdown_editor.py']
 DATA_FILES = []
-OPTIONS = {
+OPTIONS = {{
     'argv_emulation': False,  # Avoid Tk console/menu crashes on recent macOS builds
-    'iconfile': 'app_icon.icns',  # Optional: add if you have an icon
-        'plist': {
+    'plist': {{
         'CFBundleName': 'Markdown Editor',
         'CFBundleDisplayName': 'Markdown Editor',
         'CFBundleGetInfoString': 'A simple markdown editor with live preview',
         'CFBundleIdentifier': 'com.markdown.editor',
         'CFBundleVersion': '1.0.0',
         'CFBundleShortVersionString': '1.0.0',
-        'NSHumanReadableCopyright': 'Copyright © 2024',
+        'NSHumanReadableCopyright': 'Copyright 2024',
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.13.0',
         'NSRequiresAquaSystemAppearance': False,
-        'LSUIElement': False,  # Ensure app appears in dock
+        'LSUIElement': False,
         'NSPrincipalClass': 'NSApplication',
-        'LSEnvironment': {
+        'LSEnvironment': {{
             'TK_SILENCE_DEPRECATION': '1',
             'TK_MAC_USE_APP_MAIN_MENU': '0',
-        },
-    },
+        }},
+    }},
+{frameworks_line}
     'packages': ['tkinter'],
     'includes': ['tkinter.ttk', 'tkinter.scrolledtext', 'tkinter.filedialog', 'tkinter.messagebox', 'tkinter.font'],
     'excludes': ['matplotlib', 'numpy', 'scipy', 'pandas', 'PIL', 'cv2', 'setuptools', 'pkg_resources', 'wheel'],
     'optimize': 2,
-}
+}}
 
 setup(
     app=APP,
     data_files=DATA_FILES,
-    options={'py2app': OPTIONS},
+    options={{'py2app': OPTIONS}},
     setup_requires=['py2app'],
 )
 '''
-    
+
     with open('setup.py', 'w') as f:
         f.write(setup_content)
     print("Created setup.py")
