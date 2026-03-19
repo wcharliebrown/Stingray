@@ -75,10 +75,68 @@ def find_libffi():
     return None
 
 
+def find_tcltk(python_exe=None):
+    """Find libtk8.6.dylib and libtcl8.6.dylib — required by _tkinter but not auto-bundled by py2app"""
+    if python_exe is None:
+        python_exe = sys.executable
+
+    # Try to find where _tkinter lives and look in its parent lib dir first
+    candidates_tk = []
+    candidates_tcl = []
+    try:
+        result = subprocess.run(
+            [python_exe, '-c', 'import _tkinter; print(_tkinter.__file__)'],
+            capture_output=True, text=True, timeout=5
+        )
+        tkinter_path = result.stdout.strip()
+        if tkinter_path:
+            # lib-dynload/../.. → env lib dir
+            lib_dir = os.path.dirname(os.path.dirname(tkinter_path))
+            candidates_tk.append(os.path.join(lib_dir, 'libtk8.6.dylib'))
+            candidates_tcl.append(os.path.join(lib_dir, 'libtcl8.6.dylib'))
+    except Exception:
+        pass
+
+    candidates_tk += [
+        '/opt/homebrew/anaconda3/lib/libtk8.6.dylib',
+        '/opt/homebrew/opt/tcl-tk/lib/libtk8.6.dylib',
+        '/usr/local/opt/tcl-tk/lib/libtk8.6.dylib',
+        '/opt/homebrew/lib/libtk8.6.dylib',
+        '/usr/local/lib/libtk8.6.dylib',
+    ]
+    candidates_tcl += [
+        '/opt/homebrew/anaconda3/lib/libtcl8.6.dylib',
+        '/opt/homebrew/opt/tcl-tk/lib/libtcl8.6.dylib',
+        '/usr/local/opt/tcl-tk/lib/libtcl8.6.dylib',
+        '/opt/homebrew/lib/libtcl8.6.dylib',
+        '/usr/local/lib/libtcl8.6.dylib',
+    ]
+
+    libtk = next((p for p in candidates_tk if os.path.exists(p)), None)
+    libtcl = next((p for p in candidates_tcl if os.path.exists(p)), None)
+
+    if libtk:
+        print(f"Found libtk: {libtk}")
+    else:
+        print("Warning: libtk8.6.dylib not found — the built app may fail to launch")
+    if libtcl:
+        print(f"Found libtcl: {libtcl}")
+    else:
+        print("Warning: libtcl8.6.dylib not found — the built app may fail to launch")
+
+    return libtk, libtcl
+
+
 def create_setup_py():
     """Create setup.py file for py2app"""
     libffi_path = find_libffi()
-    frameworks_line = f"    'frameworks': [{repr(libffi_path)}]," if libffi_path else "    # 'frameworks': [],  # libffi.8.dylib not found — install via: brew install libffi"
+    libtk_path, libtcl_path = find_tcltk()
+    frameworks = [p for p in [libffi_path, libtk_path, libtcl_path] if p]
+    if frameworks:
+        items = ',\n        '.join(repr(p) for p in frameworks)
+        frameworks_line = f"    'frameworks': [\n        {items},\n    ],"
+    else:
+        frameworks_line = "    # 'frameworks': [],  # Required libs not found — install via: brew install libffi tcl-tk"
 
     setup_content = f'''#!/usr/bin/env python3
 """
