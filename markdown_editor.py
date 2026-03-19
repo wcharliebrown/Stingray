@@ -527,6 +527,9 @@ class MarkdownEditor:
         self.text_area.bind('<Command-Shift-Z>', self.handle_redo)
         self.text_area.bind('<Control-Shift-z>', self.handle_redo)
         self.text_area.bind('<Control-Shift-Z>', self.handle_redo)
+        self.text_area.bind('<KP_Enter>', self.handle_kp_enter)
+        self.text_area.bind('<Command-d>', self.duplicate_selection)
+        self.text_area.bind('<Control-d>', self.duplicate_selection)
 
         # Bind Ctrl+F / Cmd+F to focus editor search
         self.root.bind('<Control-f>', lambda e: self.focus_editor_search())
@@ -902,6 +905,34 @@ You can also create headers by typing:
         """Handle key press events"""
         # Allow the key to be processed normally
         return None
+
+    def handle_kp_enter(self, event):
+        """Handle numeric keypad Enter key — treat it like regular Enter"""
+        self.text_area.insert(tk.INSERT, '\n')
+        self.on_text_change(event)
+        return "break"
+
+    def duplicate_selection(self, event=None):
+        """Duplicate selected text, or duplicate current line if nothing selected"""
+        try:
+            sel_start = self.text_area.index(tk.SEL_FIRST)
+            sel_end = self.text_area.index(tk.SEL_LAST)
+            selected_text = self.text_area.get(sel_start, sel_end)
+            self.text_area.insert(sel_end, selected_text)
+            new_end = self.text_area.index(f"{sel_end}+{len(selected_text)}c")
+            self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
+            self.text_area.tag_add(tk.SEL, sel_end, new_end)
+            self.text_area.mark_set(tk.INSERT, new_end)
+        except tk.TclError:
+            # No selection — duplicate current line
+            current_pos = self.text_area.index(tk.INSERT)
+            line_num = current_pos.split('.')[0]
+            line_start = f"{line_num}.0"
+            line_end = f"{line_num}.end"
+            line_content = self.text_area.get(line_start, line_end)
+            self.text_area.insert(line_end, "\n" + line_content)
+        self.schedule_auto_save()
+        return "break"
     
     def on_text_change(self, event):
         """Handle text change events"""
